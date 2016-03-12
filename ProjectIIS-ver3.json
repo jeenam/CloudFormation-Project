@@ -1,0 +1,374 @@
+{
+ "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "AWS CloudFormation  Windows stack  (web application on IIS). This stack should have an Auto scaling group and elastic load balancer ,
+                  it ASG should spread across 2 AZ’s and deploy ASP.NET Website and replace the default IIS Website",
+
+  "Parameters" : {
+    "InstanceType" : {
+      "Description" : "WindowsIIS EC2 instance type",
+      "Type" : "String",
+      "Default" : "t2.micro",
+      "AllowedValues" : [ "t1.micro", "t2.micro", "t2.small", "t2.medium", "m1.small", "m1.medium", "m1.large",
+      "m1.xlarge", "m2.xlarge", "m2.2xlarge", "m2.4xlarge", "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge", "c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge",
+      "c3.4xlarge", "c3.8xlarge", "g2.2xlarge", "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge", "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge",
+      "hi1.4xlarge", "hs1.8xlarge", "cr1.8xlarge", "cc2.8xlarge", "cg1.4xlarge"],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+       },
+    "Iamuser" : {
+      "Description" : "Name of IAM Profile that will be used by instances to access AWS Services",
+      "Type"        : "String",
+      "Default"     : "eenelsa@yahoo.com"
+       },
+    "KeyName" : {
+      "Description" : "The EC2 Key Pair to allow RDP access to the instances",
+      "Type" : "AWS::EC2::KeyPair::KeyName",
+      "Default" : "jeenanatk",
+      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+       },
+    "S3Bucket"     : {
+      "Description" : "The S3 Bucket where deploy files are stored",
+      "Type"        : "String",
+      "Default"     : "ApplicationBucket"
+      },
+    "PSScriptfile"  : {
+       "Description" : "The file that holds the Powershellscript",
+       "Type"        : "String",
+       "Default"     : "PSScriptfile"
+       },
+    "ASPWebsite"  : {
+      "Description" : "The zip file that holds the website",
+      "Type"        : "String",
+      "Default"     : "Helloworld.zip"
+       },
+    "myaccesskey" : {
+      "Description" : "Enter Access key",
+      "Type"        : "String",
+      "Default"     : "Accesskey"
+      },
+    "mysecretkey" : {
+      "Description" : "Enter SECRET key",
+      "Type"        : "String",
+      "Default"     : "Secretkey"
+      },
+    "SSHLocation" : {
+      "Description" : "The IP address range that can be used to SSH to the EC2 instances",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "0.0.0.0/0",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    }
+},
+
+  "Mappings" : {
+    "AWSInstanceType2Arch" : {
+      "t1.micro"    : { "Arch" : "PV64"   },
+      "t2.micro"    : { "Arch" : "HVM64"  },
+      "t2.small"    : { "Arch" : "HVM64"  },
+      "t2.medium"   : { "Arch" : "HVM64"  },
+      "m1.small"    : { "Arch" : "PV64"   },
+      "m1.medium"   : { "Arch" : "PV64"   },
+      "m1.large"    : { "Arch" : "PV64"   },
+      "m1.xlarge"   : { "Arch" : "PV64"   },
+      "m2.xlarge"   : { "Arch" : "PV64"   },
+      "m2.2xlarge"  : { "Arch" : "PV64"   },
+      "m2.4xlarge"  : { "Arch" : "PV64"   },
+      "m3.medium"   : { "Arch" : "HVM64"  },
+      "m3.large"    : { "Arch" : "HVM64"  },
+      "m3.xlarge"   : { "Arch" : "HVM64"  },
+      "m3.2xlarge"  : { "Arch" : "HVM64"  },
+      "c1.medium"   : { "Arch" : "PV64"   },
+      "c1.xlarge"   : { "Arch" : "PV64"   },
+      "c3.large"    : { "Arch" : "HVM64"  },
+      "c3.xlarge"   : { "Arch" : "HVM64"  },
+      "c3.2xlarge"  : { "Arch" : "HVM64"  },
+      "c3.4xlarge"  : { "Arch" : "HVM64"  },
+      "c3.8xlarge"  : { "Arch" : "HVM64"  },
+      "g2.2xlarge"  : { "Arch" : "HVMG2"  },
+      "r3.large"    : { "Arch" : "HVM64"  },
+      "r3.xlarge"   : { "Arch" : "HVM64"  },
+      "r3.2xlarge"  : { "Arch" : "HVM64"  },
+      "r3.4xlarge"  : { "Arch" : "HVM64"  },
+      "r3.8xlarge"  : { "Arch" : "HVM64"  },
+      "i2.xlarge"   : { "Arch" : "HVM64"  },
+      "i2.2xlarge"  : { "Arch" : "HVM64"  },
+      "i2.4xlarge"  : { "Arch" : "HVM64"  },
+      "i2.8xlarge"  : { "Arch" : "HVM64"  },
+      "hi1.4xlarge" : { "Arch" : "HVM64"  },
+      "hs1.8xlarge" : { "Arch" : "HVM64"  },
+      "cr1.8xlarge" : { "Arch" : "HVM64"  },
+      "cc2.8xlarge" : { "Arch" : "HVM64"  }
+    },
+
+    "AWSRegionArch2AMI" : {
+     "us-east-1"      : { "HVM64" : "ami-9a0558f0", "HVM32" : "ami-1e3e6374"  },
+     "us-west-2"      : { "HVM64" : "ami-83a5bce2", "HVM32" : "ami-dca9b0bd"  },
+     "us-west-1"      : { "HVM64" : "ami-e7e78d87", "HVM32" : "ami-ffe3899f"  },
+     "eu-west-1"      : { "HVM64" : "ami-7943ec0a", "HVM32" : "ami-0e43ec7d"  },
+     "ap-southeast-1" : { "HVM64" : "ami-5869ab3b", "HVM32" : "ami-c769aba4"  },
+     "ap-northeast-1" : { "HVM64" : "ami-482a1b26", "HVM32" : "ami-b91425d7"  },
+     "ap-southeast-2" : { "HVM64" : "ami-9b4f15f8", "HVM32" : "ami-ce4319ad"  },
+     "sa-east-1"      : { "HVM64" : "ami-6a981e06", "HVM32" : "ami-ffa52393"  },
+     "ap-northeast-2" : { "HVM64" : "ami-a2a06ecc", "HVM32" : "ami-e0bf718e"  },
+     "eu-central-1"   : { "HVM64" : "ami-8a918ee6", "HVM32" : "ami-05908f69"  }
+    }
+  },
+
+  "Resources" : {
+    "JeenVPC" : {
+    "Type" : "AWS::EC2::VPC",
+    "Properties" : {
+      "CidrBlock" : "16.0.0.0/26",
+      "Tags" : [ {"Key" : "Name","Value" : "jeenavpcm3"} ]
+      }
+   },
+    "IISSubnet1" : {
+    "Type" : "AWS::EC2::Subnet",
+    "Properties" : {
+      "AvailabilityZone" : "us-east-1a",
+      "CidrBlock" : "16.0.0.0/28",
+      "Tags" : [ {"Key" : "Name","Value" : "jeenaSUBNET1"} ],
+      "VpcId" : { "Ref" : "JeenVPC" }
+       }
+   },
+    "IISSubnet2" : {
+    "Type" : "AWS::EC2::Subnet",
+    "Properties" : {
+      "AvailabilityZone" : "us-east-1c",
+      "CidrBlock" : "16.0.0.16/28",
+      "Tags" : [ {"Key" : "Name","Value" : "jeenaSUBNET2"} ],
+      "VpcId" : { "Ref" : "JeenVPC" }
+      }
+   },
+    "IISSubnet3" : {
+    "Type" : "AWS::EC2::Subnet",
+    "Properties" : {
+      "AvailabilityZone" : "us-east-1d",
+      "CidrBlock" : "16.0.0.32/28",
+      "Tags" : [ {"Key" : "Name","Value" : "jeenaSUBNET3"} ],
+      "VpcId" : { "Ref" : "JeenVPC" }
+      }
+   },
+    "IISSubnet4" : {
+    "Type" : "AWS::EC2::Subnet",
+    "Properties" : {
+      "AvailabilityZone" : "us-east-1e",
+      "CidrBlock" : "16.0.0.48/28",
+      "Tags" : [ {"Key" : "Name","Value" : "jeenaSUBNET4"} ],
+      "VpcId" : { "Ref" : "JeenVPC" }
+      }
+    },
+    "InternetGateway" : {
+     "Type" : "AWS::EC2::InternetGateway",
+     "Properties" : {
+       "Tags" : [
+         { "Key" : "Application", "Value" : { "Ref" : "AWS::StackId" } },
+         { "Key" : "Network", "Value" : "Public" }
+       ]
+     }
+   },
+    "GatewayToInternet" : {
+      "Type" : "AWS::EC2::VPCGatewayAttachment",
+      "Properties" : {
+        "VpcId" : { "Ref" : "JeenVPC" },
+        "InternetGatewayId" : { "Ref" : "InternetGateway" }
+      }
+    },
+    "PublicRouteTable" : {
+     "Type" : "AWS::EC2::RouteTable",
+     "Properties" : {
+       "VpcId" : { "Ref" : "JeenVPC" },
+       "Tags" : [
+         { "Key" : "Application", "Value" : { "Ref" : "AWS::StackId" } },
+         { "Key" : "Network", "Value" : "Public" }
+       ]
+     }
+    },
+   "PublicRoute" : {
+     "Type" : "AWS::EC2::Route",
+     "DependsOn" : "GatewayToInternet",
+     "Properties" : {
+       "RouteTableId" : { "Ref" : "PublicRouteTable" },
+       "DestinationCidrBlock" : "0.0.0.0/0",
+       "GatewayId" : { "Ref" : "InternetGateway" }
+     }
+   },
+   "IISSubnet1RTAssociation" : {
+     "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+     "Properties" : {
+       "SubnetId" : { "Ref" : "IISSubnet1" },
+       "RouteTableId" : { "Ref" : "PublicRouteTable" }
+     }
+   },
+   "IISSubnet2RTAssociation" : {
+     "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+     "Properties" : {
+       "SubnetId" : { "Ref" : "IISSubnet2" },
+       "RouteTableId" : { "Ref" : "PublicRouteTable" }
+     }
+   },
+   "IISSubnet3RTAssociation" : {
+     "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+     "Properties" : {
+       "SubnetId" : { "Ref" : "IISSubnet3" },
+       "RouteTableId" : { "Ref" : "PublicRouteTable" }
+     }
+   },
+   "IISSubnet4RTAssociation" : {
+     "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+     "Properties" : {
+       "SubnetId" : { "Ref" : "IISSubnet4" },
+       "RouteTableId" : { "Ref" : "PublicRouteTable" }
+     }
+   },
+  "WebServerGroup" : {
+    "Type" : "AWS::AutoScaling::AutoScalingGroup",
+    "DependsOn" : "GatewayToInternet",
+    "Properties" : {
+      "AvailabilityZones" : { "Fn::GetAZs" : { "Ref" : "AWS::Region" } },
+      "VPCZoneIdentifier" : [{"Ref": "IISSubnet1"},{"Ref": "IISSubnet2"},{"Ref": "IISSubnet3"},{"Ref": "IISSubnet4"}],
+      "LaunchConfigurationName" : { "Ref" : "LaunchConfig" },
+      "MinSize" : "2",
+      "MaxSize" : "3",
+      "LoadBalancerNames" : [ { "Ref" : "ElasticLoadBalancer" } ]
+      }
+      },
+    "LaunchConfig" : {
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+      "DependsOn" : "GatewayToInternet",
+      "Metadata" : {
+        "Comment" : "Install a simple application",
+        "AWS::CloudFormation::Init" : {
+        "config" : {
+        "sources" : {
+          "c:\\inetpub" : { "Fn::Join" : ["", ["https://s3.amazonaws.com/", { "Ref" : "S3Bucket" },"/",{ "Ref" : "ASPWebsite" }]]}
+          },
+        "files" : {
+          "C:\\ASPwebIIS.ps1" : {
+             "source" : { "Fn::Join" : ["", ["https://s3.amazonaws.com/", { "Ref" : "S3Bucket" },"/",{ "Ref" : "PSScriptfile" }]]}
+              }
+          },
+        "commands" : {
+        "1-execute-powershell" : {
+        "command": "powershell.exe -ExecutionPolicy Unrestricted C:\\ASPwebIIS.ps1"
+                }},
+        "services" : {
+         "windows" : {
+           "cfn-hup" : {
+           "enabled" : "true",
+           "ensureRunning" : "true",
+           "files" : ["c:\\cfn\\cfn-hup.conf", "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"]
+        }}
+     }}},
+     "AWS::CloudFormation::Authentication" : {
+             "S3AccessCreds" : {
+                "type" : "S3",
+                "accessKeyId" : { "Ref" : "myaccesskey" },
+                "secretKey" : {"Ref" : "mysecretkey"},
+                "buckets" : [ { "Ref" : "S3Bucket" } ]
+                    }
+                }
+        },
+
+    "Properties" : {
+      "KeyName" : { "Ref" : "KeyName" },
+      "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                                       { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+      "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+      "AssociatePublicIpAddress" : "true",
+      "InstanceType" : { "Ref" : "InstanceType" },
+      "UserData" : { "Fn::Base64" : { "Fn::Join" : ["",
+          ["<script>\n",
+             "cfn-init.exe -v -s ", {"Ref" : "AWS::StackId"}, " -r LaunchConfig --region ", {"Ref" : "AWS::Region"}, "\n",
+          "</script>\n"]
+          ]}}
+       }
+     },
+    "ElasticLoadBalancer" : {
+      "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+      "DependsOn" : "GatewayToInternet",
+      "Properties" : {
+        "Subnets" : [ { "Ref" : "IISSubnet3"},{ "Ref" : "IISSubnet4"} ],
+        "SecurityGroups" : [ { "Ref" : "LoadbalancerSecurityGroup"} ],
+        "CrossZone" : "true",
+        "Listeners" : [{
+          "LoadBalancerPort" : "80",
+          "InstancePort" : "80",
+          "Protocol" : "HTTP"
+           }],
+        "HealthCheck" : {
+        "Target" : "HTTP:80/",
+        "HealthyThreshold" : "3",
+        "UnhealthyThreshold" : "5",
+        "Interval" : "30",
+        "Timeout" : "10"
+         }
+       }
+     },
+    "InstanceSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable SSH access and HTTP from the load balancer only",
+        "SecurityGroupIngress" : [
+          {
+          "IpProtocol" : "tcp",
+          "FromPort" : "3389",
+          "ToPort" : "3389",
+          "CidrIp" : { "Ref" : "SSHLocation"}
+          },
+          {
+          "IpProtocol" : "tcp",
+          "FromPort" : "443",
+          "ToPort" : "443",
+          "CidrIp" : { "Ref" : "SSHLocation"}
+          },
+          {
+          "IpProtocol" : "tcp",
+          "FromPort" : "80",
+          "ToPort" : "80",
+          "CidrIp" : { "Ref" : "SSHLocation"}
+           }
+           ],
+        "Tags" :  [ {"Key" : "Name","Value" : "jeenasecgp"} ],
+        "VpcId" : { "Ref" : "JeenVPC" }
+      }
+    },
+    "LoadbalancerSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable SSH access and HTTP from the load balancer only",
+        "SecurityGroupIngress" : [
+          {
+          "IpProtocol" : "tcp",
+          "FromPort" : "3389",
+          "ToPort" : "3389",
+          "CidrIp" : { "Ref" : "SSHLocation"}
+         },
+         {
+          "IpProtocol" : "tcp",
+          "FromPort" : "443",
+          "ToPort" : "443",
+          "CidrIp" : { "Ref" : "SSHLocation"}
+         },
+         {
+          "IpProtocol" : "tcp",
+          "FromPort" : "80",
+          "ToPort" : "80",
+          "CidrIp" : { "Ref" : "SSHLocation"}
+          }
+          ],
+        "Tags" :  [ {"Key" : "Name","Value" : "jeenalbsecgp"} ],
+        "VpcId" : { "Ref" : "JeenVPC" }
+      }
+    }
+
+    },
+  "Outputs" : {
+    "URL" : {
+      "Description" : "The URL of the website",
+      "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "ElasticLoadBalancer", "DNSName" ]}]]}
+    }
+  }
+}
