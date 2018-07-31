@@ -1,0 +1,30 @@
+The configuration for this scenario includes a virtual private cloud (VPC) with a single public subnet, and an Internet gateway to enable communication over the Internet. AWS recommend this configuration if you need to run a single-tier, public-facing web application, 
+such as a blog or a simple website.
+
+Create an index.html page with a text editor (sublime) in your work space , with the following content
+<html>
+<head> test web page </head>
+<body>
+<h1>This is a website </h1>
+</body>
+</html>
+Choose S3 service in AWS console
+ 
+Create a new S3 Bucket
+ 
+ 
+
+ 
+Upload the index.html file you have created to the bucket
+ 
+Click on bucket properties
+Enable website hosting , with index.html as the index document
+ 
+Copy the website URL
+ 
+Open the URL in browser
+ 
+Configure bucket policy  , Permissions - > Bucket policy
+
+ 
+Reload the website URL , you will see the index page
